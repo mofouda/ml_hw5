@@ -1,0 +1,23 @@
+---
+title: "Untitled"
+author: "Mohammad"
+date: "2023-02-17"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(caret)
+library(stats)
+library(ggbiplot)
+library(factoextra)
+library(cluster)
+
+knitr::opts_chunk$set(
+	echo = TRUE,
+	warning = FALSE,
+	fig.width = 8, 
+  fig.height = 6,
+  out.width = "90%")
+```
+

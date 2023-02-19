@@ -1,0 +1,149 @@
+---
+title: "ml_hw5"
+author: "Mohammad"
+date: "2023-02-17"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(caret)
+library(stats)
+library(glmnet)
+
+knitr::opts_chunk$set(
+	echo = TRUE,
+	warning = FALSE,
+	fig.width = 8, 
+  fig.height = 6,
+  out.width = "90%")
+```
+
+ For the purpose of this exercise, the data has been subset to include only 7 features on personality traits and the variable which distinguishes those who reported current alcohol use (defined as alcohol use in the past month or more frequently) vs no current use. Data are stored in the csv file alcohol_use.csv on the course site.
+
+Feature Information: Below is a list of the 7 features and outcome variable within the dataset. Note the dataset also contains an ID variable. In general, the higher value of the score, the greater the personality trait observed within the individual based on the questionnaire.
+
+alc_consumption: CurrentUse, NotCurrentUse 
+neurotocism_score: Measure of Neuroticism
+extroversion_score: Measure of Extroversion
+openness_score: Measure of Openness to Experiences
+agreeableness_score: Measure of Agreeableness
+conscientiousness_score: Measure of Conscientiousness
+impulsiveness_score: Measure of Impulsivity
+sens_seeking_score: Measure of Sensation-Seeking Behaviors.
+ 
+# Preprocessing
+
+## Tidying
+
+```{r tidying}
+au <-
+    read_csv("data/alcohol_use.csv") %>% 
+    mutate(alc_consumption = factor(alc_consumption)) %>% 
+    select(- ...1)
+```
+
+## Correlations 
+
+```{r correlations}
+cor_au <-
+    au %>% 
+    select(where(is.numeric)) %>% 
+    cor(use = "complete.obs") %>% 
+    findCorrelation(cutoff = 0.4)
+```
+
+## Scaling and partioning 
+
+```{r partitioning}
+set.seed(123)
+ 
+train.index <- createDataPartition(au$alc_consumption, p = 0.7, list = FALSE)
+
+au_train <- au[train.index, ]
+au_test <- au[-train.index, ]
+
+#tidyverse way to create data partition
+#au_train <- au$alc_consumption %>% createDataPartition(p = 0.7, list = F)
+```
+
+Instructions for Assignment
+
+Goal: You want to predict current alcohol consumption but it is expensive and time-consuming to administer all of the behavioral testing that produces the personality scores. You will conduct a reproducible analysis to build and test classification models using regularized logistic regression and traditional logistic regression.
+
+Address the following:
+You should create and compare three different models:
+
+A model that chooses alpha and lambda via cross-validation using all of the features 1
+
+
+```{r elastic net}
+set.seed(123)
+
+enet <- 
+    train(alc_consumption ~., data = au_train, method = "glmnet", 
+          trControl = trainControl("cv", number = 10), preProc = c("center", "scale"),
+          tuneLength = 10)
+
+#Print the values of alpha and lambda that gave best prediction
+enet$bestTune
+
+#Print all of the options examined
+enet$results
+
+# Model coefficients
+coef(enet$finalModel, enet$bestTune$lambda)
+```
+
+
+A model that uses all the features and traditional logistic regression
+
+```{r}
+glm <-
+    train(alc_consumption ~., data = au_train, method = "glm", 
+          trControl = trainControl("cv", number = 10),  family = "binomial",
+          preProc = c("center", "scale"))
+
+glm
+
+#Additional measures, such as sensitivity, specificity, and AUC, can be requested by using the twoClassSummary function in trainControl with the argument classProbs = TRUE
+#summaryFunction = twoClassSummary, classProbs = TRUE
+
+```
+
+A lasso model using all of the features
+
+```{r}
+#Create grid to search lambda
+lambda <- 10^seq(-3,3, length = 100)
+
+set.seed(123)
+
+lasso <-
+    train(alc_consumption ~., data = au_train, method = "glmnet", 
+          trControl = trainControl("cv", number = 10), preProc = c("center", "scale"),
+          tuneGrid = expand.grid(alpha = 1, lambda = lambda))
+
+lasso$bestTune
+
+lasso$results
+```
+
+
+You should tune and compare the performance of all three models within the training set using cross-validation and then decide which model you would choose as your final model. Provide justification for your choice.
+
+
+Apply your final model in the test set and report your final evaluation metrics. 
+
+## Model evaluation
+
+```{r}
+pred <- enet %>% predict(au_test)
+
+# Model prediction performance
+postResample(pred, au_test$alc_consumption)
+confusionMatrix(pred, au_test$alc_consumption, positive = "CurrentUse")
+```
+
+Produce a shareable report of your analysis and results using R Markdown.
+What research questions could this analysis either a) directly address or b) indirectly help to address by providing information that could be used in subsequent analyses? Limit this response to no more than 1 paragraph. Be sure to use complete sentences.
