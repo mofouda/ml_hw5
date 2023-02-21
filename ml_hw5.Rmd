@@ -19,22 +19,28 @@ knitr::opts_chunk$set(
   out.width = "90%")
 ```
 
- For the purpose of this exercise, the data has been subset to include only 7 features on personality traits and the variable which distinguishes those who reported current alcohol use (defined as alcohol use in the past month or more frequently) vs no current use. Data are stored in the csv file alcohol_use.csv on the course site.
+For the purpose of this exercise, the data has been subset to include only 7 features on personality traits and the variable which distinguishes those who reported current alcohol use (defined as alcohol use in the past month or more frequently) vs no current use. Data are stored in the csv file alcohol_use.csv on the course site.
 
-Feature Information: Below is a list of the 7 features and outcome variable within the dataset. Note the dataset also contains an ID variable. In general, the higher value of the score, the greater the personality trait observed within the individual based on the questionnaire.
+Feature Information: Below is a list of the 7 features and outcome variable within the dataset. In general, the higher value of the score, the greater the personality trait observed within the individual based on the questionnaire.
 
-alc_consumption: CurrentUse, NotCurrentUse 
-neurotocism_score: Measure of Neuroticism
-extroversion_score: Measure of Extroversion
-openness_score: Measure of Openness to Experiences
-agreeableness_score: Measure of Agreeableness
-conscientiousness_score: Measure of Conscientiousness
-impulsiveness_score: Measure of Impulsivity
-sens_seeking_score: Measure of Sensation-Seeking Behaviors.
+* `alc_consumption`: CurrentUse, NotCurrentUse 
+* `neurotocism_score`: Measure of Neuroticism
+* `extroversion_score`: Measure of Extroversion
+* `openness_score`: Measure of Openness to Experiences
+* `agreeableness_score`: Measure of Agreeableness
+* `conscientiousness_score`: Measure of Conscientiousness
+* `impulsiveness_score`: Measure of Impulsivity
+* `sens_seeking_score`: Measure of Sensation-Seeking Behaviors.
  
+### Goal
+
+Predict current alcohol consumption but it is expensive and time-consuming to administer all of the behavioral testing that produces the personality scores.
+
 # Preprocessing
 
 ## Tidying
+
+In this step we read-in the data and convert the outcome `alc_consumption` to a factor variable. 
 
 ```{r tidying}
 au <-
@@ -45,6 +51,9 @@ au <-
 
 ## Correlations 
 
+Next we check for high correlations in the dataset. The features 5 and 7 appear to be highly correlated. We can remove them from the dataset before training the model but for the purpose of this analysis, we will keep them.
+
+
 ```{r correlations}
 cor_au <-
     au %>% 
@@ -54,6 +63,8 @@ cor_au <-
 ```
 
 ## Scaling and partioning 
+
+Here we standardize the data by scaling it then we split it into 70/30 training and testing datasets for further model fit. 
 
 ```{r partitioning}
 set.seed(123)
@@ -67,23 +78,21 @@ au_test <- au[-train.index, ]
 #au_train <- au$alc_consumption %>% createDataPartition(p = 0.7, list = F)
 ```
 
-Instructions for Assignment
+## Comparing models
 
-Goal: You want to predict current alcohol consumption but it is expensive and time-consuming to administer all of the behavioral testing that produces the personality scores. You will conduct a reproducible analysis to build and test classification models using regularized logistic regression and traditional logistic regression.
+Next we conduct a reproducible analysis to build and test classification models using regularized logistic regression and traditional logistic regression.
 
-Address the following:
-You should create and compare three different models:
+### Elastic Net
 
-A model that chooses alpha and lambda via cross-validation using all of the features 1
-
+A model that chooses alpha and lambda via cross-validation using all of the features. This will be an elastic net model. The best tune for this model is alpha = 0.7 and a lambda = 0.2578. The accuracy of this model is 0.8515. 
 
 ```{r elastic net}
 set.seed(123)
 
 enet <- 
     train(alc_consumption ~., data = au_train, method = "glmnet", 
-          trControl = trainControl("cv", number = 10), preProc = c("center", "scale"),
-          tuneLength = 10)
+          trControl = trainControl("cv", number = 10), 
+          preProc = c("center", "scale"), tuneLength = 10)
 
 #Print the values of alpha and lambda that gave best prediction
 enet$bestTune
@@ -93,57 +102,78 @@ enet$results
 
 # Model coefficients
 coef(enet$finalModel, enet$bestTune$lambda)
+
+#Model performance
+confusionMatrix(enet)
 ```
 
+### Traditional logisitc regression
 
-A model that uses all the features and traditional logistic regression
+A model that uses all the features and traditional logistic regression. The accuracy for this model is 0.7962
 
 ```{r}
+set.seed(123) 
+
 glm <-
     train(alc_consumption ~., data = au_train, method = "glm", 
           trControl = trainControl("cv", number = 10),  family = "binomial",
           preProc = c("center", "scale"))
 
-glm
+#Model performance
+confusionMatrix(glm)
 
 #Additional measures, such as sensitivity, specificity, and AUC, can be requested by using the twoClassSummary function in trainControl with the argument classProbs = TRUE
 #summaryFunction = twoClassSummary, classProbs = TRUE
 
 ```
 
-A lasso model using all of the features
+### LASSO
+
+A lasso model using all of the features. The best tune for this model uses an alpha = 1 (default for lasso) and a lamda = 0.2310. The accuracy of this model is 0.8515
 
 ```{r}
 #Create grid to search lambda
-lambda <- 10^seq(-3,3, length = 100)
+lambda <- 10^seq(-3, 3, length = 100)
 
 set.seed(123)
 
 lasso <-
     train(alc_consumption ~., data = au_train, method = "glmnet", 
-          trControl = trainControl("cv", number = 10), preProc = c("center", "scale"),
-          tuneGrid = expand.grid(alpha = 1, lambda = lambda))
+          trControl = trainControl("cv", number = 10), 
+          preProc = c("center", "scale"), tuneGrid = expand.grid(alpha = 1, lambda = lambda))
 
+#Print the values of alpha and lambda that gave best prediction
 lasso$bestTune
 
+#Print all options examined
 lasso$results
+
+# Model coefficients
+coef(lasso$finalModel, lasso$bestTune$lambda)
+
+#Model performance
+confusionMatrix(lasso)
 ```
 
+## Model choice
 
-You should tune and compare the performance of all three models within the training set using cross-validation and then decide which model you would choose as your final model. Provide justification for your choice.
+The elastic net and lasso model have similar accuracy = 0.8515. However, the lambda for the LASSO model is slightly lower. Since our goal is to reduce cost and time spent in administering all of the behavioral testing, the LASSO model would likely be a better choice since it can shrink down features to zero thus help select fewer but more relevant features. However, in the context of this problem, the coefficients for all features are identical. A more targeted approach in tuning the hyperparameters in the elastic model or using a more robust metric to evaluate model performance such as area under the curve or AUC might help make the decision on model choice easier. 
 
 
-Apply your final model in the test set and report your final evaluation metrics. 
+## Predictions 
 
-## Model evaluation
+The final model, LASSO, is used to evaluate the performance using the testing dataset. The accuracy of the model is 0.8549 with is relatively high though nit ideal. The sensitivity of the model is 100% but the specificity 69%. 82 observations were misclassified as "CurrentUse" in the prediction. 
 
 ```{r}
-pred <- enet %>% predict(au_test)
+
+pred <- lasso %>% predict(au_test)
 
 # Model prediction performance
-postResample(pred, au_test$alc_consumption)
 confusionMatrix(pred, au_test$alc_consumption, positive = "CurrentUse")
 ```
 
-Produce a shareable report of your analysis and results using R Markdown.
-What research questions could this analysis either a) directly address or b) indirectly help to address by providing information that could be used in subsequent analyses? Limit this response to no more than 1 paragraph. Be sure to use complete sentences.
+
+# Research applications 
+
+The data could be used to train models to directly predict the risk of alcohol use in adults with medical conditions that may be complicated by alcohol use, based on individual personality traits. This could consequently inform future clinical decisions for these patients. Indirectly, it could be used to predict risk of other drug use among adults based on their individual personality traits which could be used to inform the development of social and health education programs and properly directing resources to those at higher risk.
+
