@@ -2,7 +2,7 @@
 title: "ml_hw5"
 author: "Mohammad"
 date: "2023-02-17"
-output: html_document
+output: github_document
 ---
 
 ```{r setup, include=FALSE}
